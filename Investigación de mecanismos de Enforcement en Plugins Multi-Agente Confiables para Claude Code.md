@@ -1,4 +1,4 @@
-Investigación de mecanismos de Enforcement en Plugins Multi-Agente Confiables para Claude Code
+## Investigación de mecanismos de Enforcement en Plugins Multi-Agente Confiables para Claude Code
 
 
   Marco: Desarrollo de plugin en Claude Code
