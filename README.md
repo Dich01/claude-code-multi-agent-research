@@ -59,8 +59,8 @@
                                                                                                                                                                                                                                                                                                                               
   ## Full Report                                            
                                                                                                                                                                                                                                                                                                                               
-  - [English version](./Building-Reliable-Multi-Agent-Claude-Code-Plugins-EN.md)                                                                                                                                                                                                                                              
-  - [Spanish version](./Plugins-Multi-Agente-Claude-Code-Investigacion.md)
+  - [English version](https://github.com/Dich01/claude-code-multi-agent-research/blob/main/Building-Reliable-Multi-Agent-Claude-Code-Plugins-EN.md)                                                                                                                                                                                                                                              
+  - [Spanish version](https://github.com/Dich01/claude-code-multi-agent-research/blob/main/Investigacio%CC%81n%20de%20mecanismos%20de%20Enforcement%20en%20Plugins%20Multi-Agente%20Confiables%20para%20Claude%20Code.md)
 
 ## Credits
 Author: Diego Cheloni
