@@ -1,35 +1,71 @@
-# Technical Report: Building Reliable Multi-Agent Claude Code Plugins
+# Building Reliable Multi-Agent Claude Code Plugins                                                                                                                                                                                                                                                                         
+  ## An Empirical Investigation of Enforcement Mechanisms                                                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                                                   
+  An empirical investigation into what actually works when building
+  multi-agent plugins for Claude Code — and what doesn't, despite                                                                                                                                                                                                                                                             
+  what the documentation says.                
+                                                                                                                                                                                                                                                                                                                              
+  ## Why This Exists                                        
+                                                                                                                                                                                                                                                                                                                              
+  Prompts are suggestions. The LLM can ignore them silently. When
+  you build a multi-agent system that needs to guarantee execution                                                                                                                                                                                                                                                            
+  order, enforce TDD, or block unsafe operations, you need  
+  mechanical enforcement — not prose.                                                                                                                                                                                                                                                                                         
+                                              
+  This report documents 6 empirical tests, 12 GitHub issues, and                                                                                                                                                                                                                                                              
+  community patterns from systems with up to 112 agents in                                                                                                                                                                                                                                                                    
+  production.                                                                                                                                                                                                                                                                                                                 
+                                                                                                                                                                                                                                                                                                                              
+  ## Key Findings                                                                                                                                                                                                                                                                                                             
+                                                                                                                                                                                                                                                                                                                              
+  | Finding | Status |                                      
+  |---------|--------|                                                                                                                                                                                                                                                                                                        
+  | `exit code 2` in PreToolUse hooks blocks tool calls | Works |
+  | `exit code 1` blocks tool calls | Does not block (by design) |
+  | `permissionDecision: "deny"` blocks tool calls | Docs say yes, issue #4669 says no |
+  | Subagents can spawn subagents | No — absolute restriction |                                                                                                                                                                                                                                                               
+  | `--plugin-dir` loads settings.json and CLAUDE.md | No — empirical finding |                                                                                                                                                                                                                                               
+  | Agent frontmatter (hooks, skills) works in teammates | No — bug #30703 |                                                                                                                                                                                                                                                  
+                                                                                                                                                                                                                                                                                                                              
+  ## Validated Patterns                                                                                                                                                                                                                                                                                                       
+                                                                                                                                                                                                                                                                                                                              
+  - **Hub-and-spoke orchestration**: A central "brain" agent as main                                                                                                                                                                                                                                                          
+    session (`--agent namespace:brain`) spawns specialist subagents                                                                                                                                                                                                                                                           
+  - **Recursion guards**: Temporary flag files prevent infinite hook                                                                                                                                                                                                                                                          
+    loops when hooks propagate to subagents                                                                                                                                                                                                                                                                                   
+  - **Bash bypass defense**: When Write/Edit are blocked, Claude uses
+    `sed`, `python3 -c`, or `echo >` instead — a second hook on                                                                                                                                                                                                                                                               
+    Bash closes this vector                                                                                                                                                                                                                                                                                                   
+  - **Prerequisite gates**: Hooks verify artifact existence before                                                                                                                                                                                                                                                            
+    allowing specialist agents to execute                                                                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                                                                              
+  ## Empirical Validation                                                                                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                                                                              
+  These patterns were validated through a complete Express-to-NestJS                                                                                                                                                                                                                                                          
+  migration of a multi-tenant production project:                                                                                                                                                                                                                                                                             
+                                                                                                                                                                                                                                                                                                                              
+  - 11 agents spawned with real parallelism (up to 3 concurrent)                                                                                                                                                                                                                                                              
+  - Quality gate rejected first pass (44% coverage), forced
+    correction to 93%                                                                                                                                                                                                                                                                                                         
+  - 422 tests, zero regressions, TypeScript strict with zero errors                                                                                                                                                                                                                                                           
+                                              
+  ## Community References                                                                                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                                                                              
+  - Blake Crosley: 95 hooks in production over 9 months                                                                                                                                                                                                                                                                       
+  - kenryu42/claude-code-safety-net: semantic analysis + 5-level                                                                                                                                                                                                                                                              
+    recursive wrapper detection                                                                                                                                                                                                                                                                                               
+  - wshobson/agents: 112 agents, 16 orchestrators                                                                                                                                                                                                                                                                             
+  - Issue #29795: 5-layer QA system built from 68 documented failures
+                                                                                                                                                                                                                                                                                                                              
+  ## Full Report                                            
+                                                                                                                                                                                                                                                                                                                              
+  - [English version](./Building-Reliable-Multi-Agent-Claude-Code-Plugins-EN.md)                                                                                                                                                                                                                                              
+  - [Spanish version](./Plugins-Multi-Agente-Claude-Code-Investigacion.md)
 
-## Overview
-This report documents an empirical investigation into the enforcement mechanisms and orchestration patterns required to build a 19-agent autonomous software development lifecycle (SDLC) plugin within the **Claude Code** environment. 
+## Credits
+Author: Diego Cheloni
+https://github.com/Dich01/
 
-The research identifies critical discrepancies between official documentation and CLI behavior, specifically regarding tool-blocking hooks and agent hierarchy limitations.
+Date: March 14, 2026
 
-## Key Research Findings
-
-* **Reliable Enforcement**: The only deterministic way to block a tool call is using `exit code 2` in `PreToolUse` hooks.
-* **Documentation Discrepancies**: Findings show `permissionDecision "deny"` is frequently ignored by the LLM, contradicting official documentation.
-* **Orchestration Constraints**: Subagents are strictly prohibited from spawning other subagents. 
-* **Orchestrator Mode**: To enable a "Brain" orchestrator, the plugin must be initialized as the main session agent using the mandatory namespace format: `--agent Plugin_name:brain`.
-* **Silent Failures**: The `--plugin-dir` flag fails to load `settings.json` and `CLAUDE.md`, necessitating custom bootstrap logic.
-
-## Technical Architecture
-The investigated system employs a **hub-and-spoke** model with a centralized orchestrator managing 19 specialized markdown agents and 13 skills.
-
-### Defense-in-Depth Enforcement
-* **Flow Order**: Ensures the Orchestrator initiates all sessions and registers the session state.
-* **Prerequisite Gates**: Blocks specialist agents until required artifacts (OpenAPI specs, TDD logs) are detected.
-* **Read-Only Protection**: Prevents agents from modifying the plugin's core logic during execution via directory path comparison.
-* **Recursion Guards**: Implements temporary flag files (`/tmp/hook-guard-$$`) to prevent infinite loops during hook propagation.
-
-## Empirical Validation: Express to NestJS Migration
-The patterns described in this report were validated through a complete framework migration of a multi-tenant production project:
-* **Agents Spawned**: 11 unique agents coordinated by the central Brain.
-* **Paralellism**: Confirmed 3-way parallel execution (Architecture-Guardian, Test-Architect, Isolation-Tester).
-* **Reliability**: 422 total tests with 93% coverage and zero regressions upon completion.
-
-## Reproduction Command
-To activate the orchestrator mode identified in this research:
-
-```bash
-claude --plugin-dir /path/to/Plugin_name --agent Plugin_name:brain
+Environment: Claude Code CLI (March 2026), Claude Opus 4.6
